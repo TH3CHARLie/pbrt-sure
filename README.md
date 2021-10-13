@@ -1,3 +1,22 @@
+# PBRT-SURE
+
+SURE-based Optimization for Adaptive Sampling and Reconstruction implementation based on PBRT-v3
+
+## init
+```
+git clone --recursive https://github.com/TH3CHARLie/pbrt-sure.git
+```
+
+## build
+```
+mkdir build
+cd build
+cmake ..
+make -j4
+```
+
+old README below
+
 pbrt, Version 3
 ===============
 
