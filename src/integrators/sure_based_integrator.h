@@ -5,6 +5,7 @@
 #include "integrator.h"
 #include "integrators/path.h"
 #include "pbrt.h"
+#include "paramset.h"
 #include "sampler.h"
 #include <memory>
 
@@ -17,8 +18,9 @@ class SUREBasedIntegrator : public Integrator {
   public:
     SUREBasedIntegrator(std::shared_ptr<Sampler> sampler,
                         std::shared_ptr<const Camera> camera,
-                        std::shared_ptr<PathIntegrator> path_integrator)
-        : sampler(sampler), camera(camera), path_integrator(path_integrator) {}
+                        std::shared_ptr<PathIntegrator> path_integrator,\
+                        const Bounds2i pixel_bounds)
+        : sampler(sampler), camera(camera), path_integrator(path_integrator), pixel_bounds(pixel_bounds) {}
 
     virtual ~SUREBasedIntegrator() {}
 
@@ -28,6 +30,7 @@ class SUREBasedIntegrator : public Integrator {
     std::shared_ptr<Sampler> sampler;
     std::shared_ptr<const Camera> camera;
     std::shared_ptr<PathIntegrator> path_integrator;
+    const Bounds2i pixel_bounds;
 };
 
 SUREBasedIntegrator *CreateSUREBasedIntegrator(
