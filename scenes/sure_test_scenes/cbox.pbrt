@@ -1,4 +1,4 @@
-Integrator "sure" "integer maxdepth" [ 65 ] 
+Integrator "sure" "integer maxdepth" [ 65 ] "integer samplebudget" [64] "integer initialsamples" [8] "integer adaptivesamples" [8]
 Transform [ 1 -0 -0 -0 -0 1 -0 -0 -0 -0 -1 -0 -0 -1 6.8 1]
 Sampler "sobol" "integer pixelsamples" [ 64 ] 
 PixelFilter "triangle" "float xwidth" [ 1.000000 ] "float ywidth" [ 1.000000 ] 
