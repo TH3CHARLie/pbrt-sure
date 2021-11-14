@@ -233,6 +233,7 @@ class BxDF {
                          const Point2f *samples) const;
     virtual Spectrum rho(int nSamples, const Point2f *samples1,
                          const Point2f *samples2) const;
+    virtual Spectrum rho() const { return Spectrum(0.f); }
     virtual Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
     virtual std::string ToString() const = 0;
 
@@ -257,6 +258,9 @@ class ScaledBxDF : public BxDF {
     Spectrum rho(int nSamples, const Point2f *samples1,
                  const Point2f *samples2) const {
         return scale * bxdf->rho(nSamples, samples1, samples2);
+    }
+    Spectrum rho() const {
+        return scale * bxdf->rho();
     }
     Spectrum f(const Vector3f &wo, const Vector3f &wi) const;
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &sample,
@@ -322,6 +326,9 @@ class SpecularReflection : public BxDF {
     Spectrum f(const Vector3f &wo, const Vector3f &wi) const {
         return Spectrum(0.f);
     }
+    Spectrum rho() const {
+        return Spectrum(0.f);
+    }
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &sample,
                       Float *pdf, BxDFType *sampledType) const;
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const { return 0; }
@@ -349,6 +356,9 @@ class SpecularTransmission : public BxDF {
     }
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &sample,
                       Float *pdf, BxDFType *sampledType) const;
+    Spectrum rho() const {
+        return Spectrum(0.f);
+    }
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const { return 0; }
     std::string ToString() const;
 
@@ -374,6 +384,9 @@ class FresnelSpecular : public BxDF {
     Spectrum f(const Vector3f &wo, const Vector3f &wi) const {
         return Spectrum(0.f);
     }
+    Spectrum rho() const {
+        return Spectrum(0.f);
+    }
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &u,
                       Float *pdf, BxDFType *sampledType) const;
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const { return 0; }
@@ -394,6 +407,9 @@ class LambertianReflection : public BxDF {
     Spectrum f(const Vector3f &wo, const Vector3f &wi) const;
     Spectrum rho(const Vector3f &, int, const Point2f *) const { return R; }
     Spectrum rho(int, const Point2f *, const Point2f *) const { return R; }
+    Spectrum rho() const {
+        return R;
+    }
     std::string ToString() const;
 
   private:
@@ -409,6 +425,9 @@ class LambertianTransmission : public BxDF {
     Spectrum f(const Vector3f &wo, const Vector3f &wi) const;
     Spectrum rho(const Vector3f &, int, const Point2f *) const { return T; }
     Spectrum rho(int, const Point2f *, const Point2f *) const { return T; }
+    Spectrum rho() const {
+        return T;
+    }
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &u,
                       Float *pdf, BxDFType *sampledType) const;
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
@@ -430,6 +449,9 @@ class OrenNayar : public BxDF {
         A = 1.f - (sigma2 / (2.f * (sigma2 + 0.33f)));
         B = 0.45f * sigma2 / (sigma2 + 0.09f);
     }
+    Spectrum rho() const {
+        return R;
+    }
     std::string ToString() const;
 
   private:
@@ -450,6 +472,9 @@ class MicrofacetReflection : public BxDF {
     Spectrum f(const Vector3f &wo, const Vector3f &wi) const;
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &u,
                       Float *pdf, BxDFType *sampledType) const;
+    Spectrum rho() const {
+        return R;
+    }
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
     std::string ToString() const;
 
@@ -476,6 +501,9 @@ class MicrofacetTransmission : public BxDF {
     Spectrum f(const Vector3f &wo, const Vector3f &wi) const;
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &u,
                       Float *pdf, BxDFType *sampledType) const;
+    Spectrum rho() const {
+        return T;
+    }
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
     std::string ToString() const;
 
@@ -500,6 +528,9 @@ class FresnelBlend : public BxDF {
     }
     Spectrum Sample_f(const Vector3f &wi, Vector3f *sampled_f, const Point2f &u,
                       Float *pdf, BxDFType *sampledType) const;
+    Spectrum rho() const {
+        return Rd;
+    }
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
     std::string ToString() const;
 
@@ -520,6 +551,9 @@ class FourierBSDF : public BxDF {
     Spectrum Sample_f(const Vector3f &wo, Vector3f *wi, const Point2f &u,
                       Float *pdf, BxDFType *sampledType) const;
     Float Pdf(const Vector3f &wo, const Vector3f &wi) const;
+    Spectrum rho() const {
+        return Spectrum(0.f);
+    }
     std::string ToString() const;
 
   private:
