@@ -42,6 +42,8 @@
 #include "pbrt.h"
 #include "integrator.h"
 #include "lightdistrib.h"
+#include "interaction.h"
+#include "sure_based_utility.h"
 
 namespace pbrt {
 
@@ -57,6 +59,9 @@ class PathIntegrator : public SamplerIntegrator {
     void Preprocess(const Scene &scene, Sampler &sampler);
     Spectrum Li(const RayDifferential &ray, const Scene &scene,
                 Sampler &sampler, MemoryArena &arena, int depth) const;
+    // modified version for SURE-based integrator            
+    Spectrum Li_SURE_ext(const RayDifferential &ray, const Scene &scene,
+                Sampler &sampler, MemoryArena &arena, SUREBasedAuxiliaryData &auxiliary, int depth = 0) const;
 
   private:
     // PathIntegrator Private Data

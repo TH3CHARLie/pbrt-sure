@@ -711,6 +711,11 @@ Spectrum BSDF::rho(const Vector3f &woWorld, int nSamples, const Point2f *samples
     return ret;
 }
 
+Spectrum BSDF::rho() const {
+    // TODO: fix this
+    return Spectrum(0.5f);
+}
+
 Spectrum BSDF::Sample_f(const Vector3f &woWorld, Vector3f *wiWorld,
                         const Point2f &u, Float *pdf, BxDFType type,
                         BxDFType *sampledType) const {

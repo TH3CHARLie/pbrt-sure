@@ -78,9 +78,10 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
                             1 /
                             std::sqrt((Float)tile_sampler->samplesPerPixel));
                         Spectrum L(0.f);
+                        SUREBasedAuxiliaryData auxiliary;
                         if (ray_weight > 0) {
-                            L = path_integrator->Li(ray, scene, *tile_sampler,
-                                                    arena, 0);
+                            L = path_integrator->Li_SURE_ext(ray, scene, *tile_sampler,
+                                                    arena, auxiliary, 0);
                         }
 
                         if (L.HasNaNs()) {
