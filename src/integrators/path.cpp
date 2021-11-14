@@ -235,8 +235,8 @@ Spectrum PathIntegrator::Li_SURE_ext(const RayDifferential &r, const Scene &scen
         isect.ComputeScatteringFunctions(ray, arena, true);
         if (foundIntersection && is_first_intersection) {
             auxiliary.normal = isect.shading.n;
-            auxiliary.depth = bounces * 1.0 / maxDepth;
             auxiliary.texture_value = (!isect.bsdf) ? Spectrum(0.f) : isect.bsdf->rho();
+            auxiliary.depth = (isect.p - ray.o).Length();
             is_first_intersection = false;
         }
         if (!isect.bsdf) {

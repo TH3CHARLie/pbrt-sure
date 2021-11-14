@@ -30,11 +30,11 @@
 
  */
 
-
 // core/film.cpp*
 #include "film.h"
-#include "paramset.h"
+
 #include "imageio.h"
+#include "paramset.h"
 #include "stats.h"
 
 namespace pbrt {
@@ -57,9 +57,9 @@ Film::Film(const Point2i &resolution, const Bounds2f &cropWindow,
                          std::ceil(fullResolution.y * cropWindow.pMin.y)),
                  Point2i(std::ceil(fullResolution.x * cropWindow.pMax.x),
                          std::ceil(fullResolution.y * cropWindow.pMax.y)));
-    LOG(INFO) << "Created film with full resolution " << resolution <<
-        ". Crop window of " << cropWindow << " -> croppedPixelBounds " <<
-        croppedPixelBounds;
+    LOG(INFO) << "Created film with full resolution " << resolution
+              << ". Crop window of " << cropWindow << " -> croppedPixelBounds "
+              << croppedPixelBounds;
 
     // Allocate film image storage
     pixels = std::unique_ptr<Pixel[]>(new Pixel[croppedPixelBounds.Area()]);
@@ -100,16 +100,15 @@ std::unique_ptr<FilmTile> Film::GetFilmTile(const Bounds2i &sampleBounds) {
     Point2i p1 = (Point2i)Floor(floatBounds.pMax - halfPixel + filter->radius) +
                  Point2i(1, 1);
     Bounds2i tilePixelBounds = Intersect(Bounds2i(p0, p1), croppedPixelBounds);
-    return std::unique_ptr<FilmTile>(new FilmTile(
-        tilePixelBounds, filter->radius, filterTable, filterTableWidth,
-        maxSampleLuminance));
+    return std::unique_ptr<FilmTile>(
+        new FilmTile(tilePixelBounds, filter->radius, filterTable,
+                     filterTableWidth, maxSampleLuminance));
 }
 
 void Film::Clear() {
     for (Point2i p : croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
-        for (int c = 0; c < 3; ++c)
-            pixel.splatXYZ[c] = pixel.xyz[c] = 0;
+        for (int c = 0; c < 3; ++c) pixel.splatXYZ[c] = pixel.xyz[c] = 0;
         pixel.filterWeightSum = 0;
     }
 }
@@ -126,6 +125,15 @@ void Film::MergeFilmTile(std::unique_ptr<FilmTile> tile) {
         tilePixel.contribSum.ToXYZ(xyz);
         for (int i = 0; i < 3; ++i) mergePixel.xyz[i] += xyz[i];
         mergePixel.filterWeightSum += tilePixel.filterWeightSum;
+        tilePixel.normal.ToXYZ(xyz);
+        for (int i = 0; i < 3; ++i) {
+            mergePixel.normal_xyz[i] += xyz[i];
+        }
+        tilePixel.texture_value.ToXYZ(xyz);
+        for (int i = 0; i < 3; ++i) {
+            mergePixel.texture_value_xyz[i] += xyz[i];
+        }
+        mergePixel.depth += tilePixel.depth;
     }
 }
 
@@ -143,23 +151,28 @@ void Film::AddSplat(const Point2f &p, Spectrum v) {
     ProfilePhase pp(Prof::SplatFilm);
 
     if (v.HasNaNs()) {
-        LOG(ERROR) << StringPrintf("Ignoring splatted spectrum with NaN values "
-                                   "at (%f, %f)", p.x, p.y);
+        LOG(ERROR) << StringPrintf(
+            "Ignoring splatted spectrum with NaN values "
+            "at (%f, %f)",
+            p.x, p.y);
         return;
     } else if (v.y() < 0.) {
-        LOG(ERROR) << StringPrintf("Ignoring splatted spectrum with negative "
-                                   "luminance %f at (%f, %f)", v.y(), p.x, p.y);
+        LOG(ERROR) << StringPrintf(
+            "Ignoring splatted spectrum with negative "
+            "luminance %f at (%f, %f)",
+            v.y(), p.x, p.y);
         return;
     } else if (std::isinf(v.y())) {
-        LOG(ERROR) << StringPrintf("Ignoring splatted spectrum with infinite "
-                                   "luminance at (%f, %f)", p.x, p.y);
+        LOG(ERROR) << StringPrintf(
+            "Ignoring splatted spectrum with infinite "
+            "luminance at (%f, %f)",
+            p.x, p.y);
         return;
     }
 
     Point2i pi = Point2i(Floor(p));
     if (!InsideExclusive(pi, croppedPixelBounds)) return;
-    if (v.y() > maxSampleLuminance)
-        v *= maxSampleLuminance / v.y();
+    if (v.y() > maxSampleLuminance) v *= maxSampleLuminance / v.y();
     Float xyz[3];
     v.ToXYZ(xyz);
     Pixel &pixel = GetPixel(pi);
@@ -168,8 +181,8 @@ void Film::AddSplat(const Point2f &p, Spectrum v) {
 
 void Film::WriteImage(Float splatScale) {
     // Convert image to RGB and compute final pixel values
-    LOG(INFO) <<
-        "Converting image to RGB and computing final weighted pixel values";
+    LOG(INFO)
+        << "Converting image to RGB and computing final weighted pixel values";
     std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
     int offset = 0;
     for (Point2i p : croppedPixelBounds) {
@@ -205,9 +218,81 @@ void Film::WriteImage(Float splatScale) {
     }
 
     // Write RGB image
-    LOG(INFO) << "Writing image " << filename << " with bounds " <<
-        croppedPixelBounds;
+    LOG(INFO) << "Writing image " << filename << " with bounds "
+              << croppedPixelBounds;
     pbrt::WriteImage(filename, &rgb[0], croppedPixelBounds, fullResolution);
+}
+
+void Film::WriteTextureImage() {
+    std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    int offset = 0;
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        XYZToRGB(pixel.texture_value_xyz, &rgb[3 * offset]);
+        // Normalize pixel with weight sum
+        Float filterWeightSum = pixel.filterWeightSum;
+        if (filterWeightSum != 0) {
+            Float invWt = (Float)1 / filterWeightSum;
+            rgb[3 * offset] = std::max((Float)0, rgb[3 * offset] * invWt);
+            rgb[3 * offset + 1] =
+                std::max((Float)0, rgb[3 * offset + 1] * invWt);
+            rgb[3 * offset + 2] =
+                std::max((Float)0, rgb[3 * offset + 2] * invWt);
+        }
+        ++offset;
+    }
+    pbrt::WriteImage("sure_texture.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+}
+
+void Film::WriteNormalImage() {
+    std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    int offset = 0;
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        XYZToRGB(pixel.normal_xyz, &rgb[3 * offset]);
+        // Normalize pixel with weight sum
+        Float filterWeightSum = pixel.filterWeightSum;
+        if (filterWeightSum != 0) {
+            Float invWt = (Float)1 / filterWeightSum;
+            rgb[3 * offset] = std::max((Float)0, rgb[3 * offset] * invWt);
+            rgb[3 * offset + 1] =
+                std::max((Float)0, rgb[3 * offset + 1] * invWt);
+            rgb[3 * offset + 2] =
+                std::max((Float)0, rgb[3 * offset + 2] * invWt);
+        }
+        ++offset;
+    }
+    pbrt::WriteImage("sure_normal.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+}
+
+void Film::WriteDepthImage() {
+    std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    int offset = 0;
+    Float max_depth = -1.0f;
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        // Normalize pixel with weight sum
+        Float filterWeightSum = pixel.filterWeightSum;
+        if (filterWeightSum != 0) {
+            Float invWt = (Float)1 / filterWeightSum;
+            max_depth = std::max(max_depth, pixel.depth * invWt);
+        }
+    }
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        // Normalize pixel with weight sum
+        Float filterWeightSum = pixel.filterWeightSum;
+        if (filterWeightSum != 0) {
+            Float invWt = (Float)1 / filterWeightSum;
+            rgb[3 * offset] = rgb[3 * offset + 1] = rgb[3 * offset + 2] =
+                std::max((Float)0, pixel.depth / max_depth * invWt);
+        }
+        ++offset;
+    }
+    pbrt::WriteImage("sure_depth.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
 }
 
 Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter) {
@@ -217,7 +302,8 @@ Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter) {
         std::string paramsFilename = params.FindOneString("filename", "");
         if (paramsFilename != "")
             Warning(
-                "Output filename supplied on command line, \"%s\" is overriding "
+                "Output filename supplied on command line, \"%s\" is "
+                "overriding "
                 "filename provided in scene description file, \"%s\".",
                 PbrtOptions.imageFile.c_str(), paramsFilename.c_str());
     } else
@@ -245,8 +331,8 @@ Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter) {
 
     Float scale = params.FindOneFloat("scale", 1.);
     Float diagonal = params.FindOneFloat("diagonal", 35.);
-    Float maxSampleLuminance = params.FindOneFloat("maxsampleluminance",
-                                                   Infinity);
+    Float maxSampleLuminance =
+        params.FindOneFloat("maxsampleluminance", Infinity);
     return new Film(Point2i(xres, yres), crop, std::move(filter), diagonal,
                     filename, scale, maxSampleLuminance);
 }

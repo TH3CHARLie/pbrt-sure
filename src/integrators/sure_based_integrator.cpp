@@ -91,7 +91,7 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
                         } else if (std::isinf(L.y())) {
                             L = Spectrum(0.f);
                         }
-                        film_tile->AddSample(camera_sample.pFilm, L,
+                        film_tile->AddSample_SURE_ext(camera_sample.pFilm, L, auxiliary,
                                              ray_weight);
 
                         arena.Reset();
@@ -105,6 +105,9 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
     }
 
     camera->film->WriteImage();
+    camera->film->WriteTextureImage();
+    camera->film->WriteNormalImage();
+    camera->film->WriteDepthImage();
 }
 
 }  // namespace pbrt
