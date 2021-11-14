@@ -30,10 +30,9 @@ SUREBasedIntegrator *CreateSUREBasedIntegrator(
 
     int64_t sample_budget = params.FindOneInt("samplebudget", 64);
     int64_t num_initial_samples = params.FindOneInt("initialsamples", 8);
-    int64_t num_adaptive_samples = params.FindOneInt("adaptivesamples", 8);
     return new SUREBasedIntegrator(
         sampler, camera, std::shared_ptr<PathIntegrator>(path_integrator),
-        pixel_bounds, sample_budget, num_initial_samples, num_adaptive_samples);
+        pixel_bounds, sample_budget, num_initial_samples);
 }
 
 void SUREBasedIntegrator::Render(const Scene &scene) {

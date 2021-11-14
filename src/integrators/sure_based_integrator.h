@@ -20,15 +20,13 @@ class SUREBasedIntegrator : public Integrator {
                         std::shared_ptr<PathIntegrator> path_integrator,
                         const Bounds2i pixel_bounds,
                         const int64_t sample_budget,
-                        const int64_t num_initial_samples,
-                        const int64_t num_adaptive_samples)
+                        const int64_t num_initial_samples)
         : sampler(sampler),
           camera(camera),
           path_integrator(path_integrator),
           pixel_bounds(pixel_bounds),
           sample_budget(sample_budget),
-          num_initial_samples(num_initial_samples),
-          num_adaptive_samples(num_adaptive_samples) {}
+          num_initial_samples(num_initial_samples) {}
 
     virtual ~SUREBasedIntegrator() {}
 
@@ -41,7 +39,6 @@ class SUREBasedIntegrator : public Integrator {
     const Bounds2i pixel_bounds;
     const int64_t sample_budget;
     const int64_t num_initial_samples;
-    const int64_t num_adaptive_samples;
 };
 
 SUREBasedIntegrator *CreateSUREBasedIntegrator(
