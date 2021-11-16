@@ -77,8 +77,10 @@ class Film {
     void WriteTextureImage();
     void WriteNormalImage();
     void WriteDepthImage();
+    void WriteFilteredImage();
+    void WriteSUREEstimatedErrorImage();
     void Preprocess_SURE_ext();
-    void CrossBilateralFilter();
+    void CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Float sigma_N, Float sigma_D);
     void Clear();
 
     // Film Public Data
@@ -101,6 +103,8 @@ class Film {
             texture_variance[0] = texture_variance[1] = texture_variance[2] = 0;
             depth_mean = 0;
             depth_variance = 0;
+            filtered_color[0] = filtered_color[1] = filtered_color[2] = 0;
+            mse_estimation[0] = mse_estimation[1] = mse_estimation[2] = 0;
         }
 
         Float xyz[3];
@@ -115,6 +119,8 @@ class Film {
         Float texture_variance[3];
         Float depth_mean;
         Float depth_variance;
+        Float filtered_color[3];
+        Float mse_estimation[3];
     };
     std::unique_ptr<Pixel[]> pixels;
     static PBRT_CONSTEXPR int filterTableWidth = 16;
