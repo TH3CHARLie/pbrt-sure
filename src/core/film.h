@@ -39,12 +39,13 @@
 #define PBRT_CORE_FILM_H
 
 // core/film.h*
-#include "pbrt.h"
-#include "geometry.h"
-#include "spectrum.h"
 #include "filter.h"
-#include "stats.h"
+#include "geometry.h"
 #include "parallel.h"
+#include "pbrt.h"
+#include "spectrum.h"
+#include "stats.h"
+#include "sure_based_utility.h"
 
 namespace pbrt {
 
@@ -52,6 +53,9 @@ namespace pbrt {
 struct FilmTilePixel {
     Spectrum contribSum = 0.f;
     Float filterWeightSum = 0.f;
+    Spectrum normal = 0.f;
+    Spectrum texture_value = 0.f;
+    Float depth = 0.f;
 };
 
 // Film Declarations
@@ -69,6 +73,12 @@ class Film {
     void SetImage(const Spectrum *img) const;
     void AddSplat(const Point2f &p, Spectrum v);
     void WriteImage(Float splatScale = 1);
+    void WriteColorImage();
+    void WriteTextureImage();
+    void WriteNormalImage();
+    void WriteDepthImage();
+    void Preprocess_SURE_ext();
+    void CrossBilateralFilter();
     void Clear();
 
     // Film Public Data
@@ -81,11 +91,30 @@ class Film {
   private:
     // Film Private Data
     struct Pixel {
-        Pixel() { xyz[0] = xyz[1] = xyz[2] = filterWeightSum = 0; }
+        Pixel() {
+            xyz[0] = xyz[1] = xyz[2] = filterWeightSum = 0;
+            color_mean[0] = color_mean[1] = color_mean[2] = 0;
+            color_variance[0] = color_variance[1] = color_variance[2] = 0;
+            normal_mean[0] = normal_mean[1] = normal_mean[2] = 0;
+            normal_variance[0] = normal_variance[1] = normal_variance[2] = 0;
+            texture_mean[0] = texture_mean[1] = texture_mean[2] = 0;
+            texture_variance[0] = texture_variance[1] = texture_variance[2] = 0;
+            depth_mean = 0;
+            depth_variance = 0;
+        }
+
         Float xyz[3];
         Float filterWeightSum;
         AtomicFloat splatXYZ[3];
         Float pad;
+        Float color_mean[3];
+        Float color_variance[3];
+        Float normal_mean[3];
+        Float normal_variance[3];
+        Float texture_mean[3];
+        Float texture_variance[3];
+        Float depth_mean;
+        Float depth_variance;
     };
     std::unique_ptr<Pixel[]> pixels;
     static PBRT_CONSTEXPR int filterTableWidth = 16;
@@ -118,11 +147,9 @@ class FilmTile {
           maxSampleLuminance(maxSampleLuminance) {
         pixels = std::vector<FilmTilePixel>(std::max(0, pixelBounds.Area()));
     }
-    void AddSample(const Point2f &pFilm, Spectrum L,
-                   Float sampleWeight = 1.) {
+    void AddSample(const Point2f &pFilm, Spectrum L, Float sampleWeight = 1.) {
         ProfilePhase _(Prof::AddFilmSample);
-        if (L.y() > maxSampleLuminance)
-            L *= maxSampleLuminance / L.y();
+        if (L.y() > maxSampleLuminance) L *= maxSampleLuminance / L.y();
         // Compute sample's raster bounds
         Point2f pFilmDiscrete = pFilm - Vector2f(0.5f, 0.5f);
         Point2i p0 = (Point2i)Ceil(pFilmDiscrete - filterRadius);
@@ -156,6 +183,54 @@ class FilmTile {
                 FilmTilePixel &pixel = GetPixel(Point2i(x, y));
                 pixel.contribSum += L * sampleWeight * filterWeight;
                 pixel.filterWeightSum += filterWeight;
+            }
+        }
+    }
+    void AddSample_SURE_ext(const Point2f &pFilm, Spectrum L,
+                            const SUREBasedAuxiliaryData &auxiliary,
+                            Float sampleWeight = 1.) {
+        ProfilePhase _(Prof::AddFilmSample);
+        if (L.y() > maxSampleLuminance) L *= maxSampleLuminance / L.y();
+        // Compute sample's raster bounds
+        Point2f pFilmDiscrete = pFilm - Vector2f(0.5f, 0.5f);
+        Point2i p0 = (Point2i)Ceil(pFilmDiscrete - filterRadius);
+        Point2i p1 =
+            (Point2i)Floor(pFilmDiscrete + filterRadius) + Point2i(1, 1);
+        p0 = Max(p0, pixelBounds.pMin);
+        p1 = Min(p1, pixelBounds.pMax);
+
+        // Loop over filter support and add sample to pixel arrays
+
+        // Precompute $x$ and $y$ filter table offsets
+        int *ifx = ALLOCA(int, p1.x - p0.x);
+        for (int x = p0.x; x < p1.x; ++x) {
+            Float fx = std::abs((x - pFilmDiscrete.x) * invFilterRadius.x *
+                                filterTableSize);
+            ifx[x - p0.x] = std::min((int)std::floor(fx), filterTableSize - 1);
+        }
+        int *ify = ALLOCA(int, p1.y - p0.y);
+        for (int y = p0.y; y < p1.y; ++y) {
+            Float fy = std::abs((y - pFilmDiscrete.y) * invFilterRadius.y *
+                                filterTableSize);
+            ify[y - p0.y] = std::min((int)std::floor(fy), filterTableSize - 1);
+        }
+        for (int y = p0.y; y < p1.y; ++y) {
+            for (int x = p0.x; x < p1.x; ++x) {
+                // Evaluate filter value at $(x,y)$ pixel
+                int offset = ify[y - p0.y] * filterTableSize + ifx[x - p0.x];
+                Float filterWeight = filterTable[offset];
+
+                // Update pixel values with filtered sample contribution
+                FilmTilePixel &pixel = GetPixel(Point2i(x, y));
+                pixel.contribSum += L * sampleWeight * filterWeight;
+                pixel.filterWeightSum += filterWeight;
+                for (int ii = 0; ii < 3; ++ii) {
+                    pixel.normal[ii] +=
+                        auxiliary.normal[ii] * sampleWeight * filterWeight;
+                }
+                pixel.texture_value +=
+                    auxiliary.texture_value * sampleWeight * filterWeight;
+                pixel.depth += auxiliary.depth;
             }
         }
     }
