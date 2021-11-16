@@ -123,17 +123,20 @@ void Film::MergeFilmTile(std::unique_ptr<FilmTile> tile) {
         Pixel &mergePixel = GetPixel(pixel);
         Float xyz[3];
         tilePixel.contribSum.ToXYZ(xyz);
-        for (int i = 0; i < 3; ++i) mergePixel.xyz[i] += xyz[i];
+        for (int i = 0; i < 3; ++i) {
+            mergePixel.xyz[i] += xyz[i];
+            mergePixel.color_mean[i] += xyz[i];
+        }
         mergePixel.filterWeightSum += tilePixel.filterWeightSum;
         tilePixel.normal.ToXYZ(xyz);
         for (int i = 0; i < 3; ++i) {
-            mergePixel.normal_xyz[i] += xyz[i];
+            mergePixel.normal_mean[i] += xyz[i];
         }
         tilePixel.texture_value.ToXYZ(xyz);
         for (int i = 0; i < 3; ++i) {
-            mergePixel.texture_value_xyz[i] += xyz[i];
+            mergePixel.texture_mean[i] += xyz[i];
         }
-        mergePixel.depth += tilePixel.depth;
+        mergePixel.depth_mean += tilePixel.depth;
     }
 }
 
@@ -223,53 +226,74 @@ void Film::WriteImage(Float splatScale) {
     pbrt::WriteImage(filename, &rgb[0], croppedPixelBounds, fullResolution);
 }
 
-void Film::WriteTextureImage() {
+void Film::WriteColorImage() {
     std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    std::unique_ptr<Float[]> var_rgb(new Float[3 * croppedPixelBounds.Area()]);
     int offset = 0;
     for (Point2i p : croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
-        XYZToRGB(pixel.texture_value_xyz, &rgb[3 * offset]);
-        // Normalize pixel with weight sum
-        Float filterWeightSum = pixel.filterWeightSum;
-        if (filterWeightSum != 0) {
-            Float invWt = (Float)1 / filterWeightSum;
-            rgb[3 * offset] = std::max((Float)0, rgb[3 * offset] * invWt);
-            rgb[3 * offset + 1] =
-                std::max((Float)0, rgb[3 * offset + 1] * invWt);
-            rgb[3 * offset + 2] =
-                std::max((Float)0, rgb[3 * offset + 2] * invWt);
-        }
+        XYZToRGB(pixel.color_mean, &rgb[3 * offset]);
+        XYZToRGB(pixel.color_variance, &var_rgb[3 * offset]);
         ++offset;
     }
-    pbrt::WriteImage("sure_texture.png", &rgb[0], croppedPixelBounds,
+    pbrt::WriteImage("sure_color_mean.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+    pbrt::WriteImage("sure_color_variance.png", &var_rgb[0], croppedPixelBounds,
+                     fullResolution);
+}
+
+void Film::WriteTextureImage() {
+    std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    std::unique_ptr<Float[]> var_rgb(new Float[3 * croppedPixelBounds.Area()]);
+    int offset = 0;
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        XYZToRGB(pixel.texture_mean, &rgb[3 * offset]);
+        XYZToRGB(pixel.texture_variance, &var_rgb[3 * offset]);
+        ++offset;
+    }
+    pbrt::WriteImage("sure_texture_mean.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+    pbrt::WriteImage("sure_texture_variance.png", &var_rgb[0], croppedPixelBounds,
                      fullResolution);
 }
 
 void Film::WriteNormalImage() {
     std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    std::unique_ptr<Float[]> var_rgb(new Float[3 * croppedPixelBounds.Area()]);
     int offset = 0;
     for (Point2i p : croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
-        XYZToRGB(pixel.normal_xyz, &rgb[3 * offset]);
-        // Normalize pixel with weight sum
-        Float filterWeightSum = pixel.filterWeightSum;
-        if (filterWeightSum != 0) {
-            Float invWt = (Float)1 / filterWeightSum;
-            rgb[3 * offset] = std::max((Float)0, rgb[3 * offset] * invWt);
-            rgb[3 * offset + 1] =
-                std::max((Float)0, rgb[3 * offset + 1] * invWt);
-            rgb[3 * offset + 2] =
-                std::max((Float)0, rgb[3 * offset + 2] * invWt);
-        }
+        XYZToRGB(pixel.normal_mean, &rgb[3 * offset]);
+        XYZToRGB(pixel.normal_variance, &var_rgb[3 * offset]);
         ++offset;
     }
-    pbrt::WriteImage("sure_normal.png", &rgb[0], croppedPixelBounds,
+    pbrt::WriteImage("sure_normal_mean.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+    pbrt::WriteImage("sure_normal_variance.png", &var_rgb[0], croppedPixelBounds,
                      fullResolution);
 }
 
 void Film::WriteDepthImage() {
     std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    std::unique_ptr<Float[]> var_rgb(new Float[3 * croppedPixelBounds.Area()]);
     int offset = 0;
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        // Normalize pixel with weight sum
+        rgb[3 * offset] = rgb[3 * offset + 1] = rgb[3 * offset + 2] =
+                std::max((Float)0, pixel.depth_mean);
+        var_rgb[3 * offset] = var_rgb[3 * offset + 1] = var_rgb[3 * offset + 2] =
+                std::max((Float)0, pixel.depth_variance);
+        ++offset;
+    }
+    pbrt::WriteImage("sure_depth_mean.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+    pbrt::WriteImage("sure_depth_variance.png", &var_rgb[0], croppedPixelBounds,
+                     fullResolution);
+}
+
+void Film::Preprocess_SURE_ext() {
     Float max_depth = -1.0f;
     for (Point2i p : croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
@@ -277,22 +301,33 @@ void Film::WriteDepthImage() {
         Float filterWeightSum = pixel.filterWeightSum;
         if (filterWeightSum != 0) {
             Float invWt = (Float)1 / filterWeightSum;
-            max_depth = std::max(max_depth, pixel.depth * invWt);
+            max_depth = std::max(max_depth, pixel.depth_mean * invWt);
         }
     }
-    for (Point2i p : croppedPixelBounds) {
+    for (Point2i p: croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
         // Normalize pixel with weight sum
         Float filterWeightSum = pixel.filterWeightSum;
         if (filterWeightSum != 0) {
             Float invWt = (Float)1 / filterWeightSum;
-            rgb[3 * offset] = rgb[3 * offset + 1] = rgb[3 * offset + 2] =
-                std::max((Float)0, pixel.depth / max_depth * invWt);
+            Float invWt1 = (Float)1 / (filterWeightSum - 1);
+            for (int i = 0; i < 3; ++i) {
+                pixel.color_variance[i] = (pixel.color_mean[i] * pixel.color_mean[i] - 
+                                           pixel.color_mean[i] * pixel.color_mean[i] * invWt) * invWt1;
+                pixel.normal_variance[i] = (pixel.normal_mean[i] * pixel.normal_mean[i] - 
+                                            pixel.normal_mean[i] * pixel.normal_mean[i] * invWt) * invWt1;
+                pixel.texture_variance[i] = (pixel.texture_mean[i] * pixel.texture_mean[i] - 
+                                             pixel.texture_mean[i] * pixel.texture_mean[i] * invWt) * invWt1;
+                pixel.color_mean[i] = pixel.color_mean[i] * invWt;
+                pixel.normal_mean[i] = pixel.normal_mean[i] * invWt;
+                pixel.texture_mean[i] = pixel.texture_mean[i] * invWt;
+            }
+            pixel.depth_mean = pixel.depth_mean / max_depth;
+            pixel.depth_variance = (pixel.depth_mean * pixel.depth_mean -
+                                    pixel.depth_mean * pixel.depth_mean * invWt) * invWt1;
+            pixel.depth_mean *= invWt;
         }
-        ++offset;
     }
-    pbrt::WriteImage("sure_depth.png", &rgb[0], croppedPixelBounds,
-                     fullResolution);
 }
 
 Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter) {

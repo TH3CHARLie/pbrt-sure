@@ -73,9 +73,12 @@ class Film {
     void SetImage(const Spectrum *img) const;
     void AddSplat(const Point2f &p, Spectrum v);
     void WriteImage(Float splatScale = 1);
+    void WriteColorImage();
     void WriteTextureImage();
     void WriteNormalImage();
     void WriteDepthImage();
+    void Preprocess_SURE_ext();
+    void CrossBilateralFilter();
     void Clear();
 
     // Film Public Data
@@ -90,19 +93,28 @@ class Film {
     struct Pixel {
         Pixel() {
             xyz[0] = xyz[1] = xyz[2] = filterWeightSum = 0;
-            normal_xyz[0] = normal_xyz[1] = normal_xyz[2] = 0;
-            texture_value_xyz[0] = texture_value_xyz[1] = texture_value_xyz[2] =
-                0;
-            depth = 0;
+            color_mean[0] = color_mean[1] = color_mean[2] = 0;
+            color_variance[0] = color_variance[1] = color_variance[2] = 0;
+            normal_mean[0] = normal_mean[1] = normal_mean[2] = 0;
+            normal_variance[0] = normal_variance[1] = normal_variance[2] = 0;
+            texture_mean[0] = texture_mean[1] = texture_mean[2] = 0;
+            texture_variance[0] = texture_variance[1] = texture_variance[2] = 0;
+            depth_mean = 0;
+            depth_variance = 0;
         }
 
         Float xyz[3];
         Float filterWeightSum;
         AtomicFloat splatXYZ[3];
         Float pad;
-        Float normal_xyz[3];
-        Float texture_value_xyz[3];
-        Float depth;
+        Float color_mean[3];
+        Float color_variance[3];
+        Float normal_mean[3];
+        Float normal_variance[3];
+        Float texture_mean[3];
+        Float texture_variance[3];
+        Float depth_mean;
+        Float depth_variance;
     };
     std::unique_ptr<Pixel[]> pixels;
     static PBRT_CONSTEXPR int filterTableWidth = 16;

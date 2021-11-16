@@ -102,9 +102,11 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
             },
             num_tiles);
         reporter.Done();
+        camera->film->Preprocess_SURE_ext();
     }
 
     camera->film->WriteImage();
+    camera->film->WriteColorImage();
     camera->film->WriteTextureImage();
     camera->film->WriteNormalImage();
     camera->film->WriteDepthImage();
