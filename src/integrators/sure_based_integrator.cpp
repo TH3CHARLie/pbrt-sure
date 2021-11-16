@@ -103,6 +103,8 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
             num_tiles);
         reporter.Done();
         camera->film->Preprocess_SURE_ext();
+        Float sigma_S = 2.0, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
+        camera->film->CrossBilateralFilter(sigma_S, sigma_R, sigma_T, sigma_N, sigma_D);
     }
 
     camera->film->WriteImage();
@@ -110,6 +112,8 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
     camera->film->WriteTextureImage();
     camera->film->WriteNormalImage();
     camera->film->WriteDepthImage();
+    camera->film->WriteFilteredImage();
+    camera->film->WriteSUREEstimatedErrorImage();
 }
 
 }  // namespace pbrt

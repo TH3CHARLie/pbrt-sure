@@ -293,6 +293,31 @@ void Film::WriteDepthImage() {
                      fullResolution);
 }
 
+void Film::WriteFilteredImage() {
+    std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    int offset = 0;
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        XYZToRGB(pixel.filtered_color, &rgb[3 * offset]);
+        ++offset;
+    }
+    pbrt::WriteImage("sure_filtered.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+}
+
+void Film::WriteSUREEstimatedErrorImage() {
+    std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    int offset = 0;
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        Float avg = (pixel.mse_estimation[0] + pixel.mse_estimation[1] + pixel.mse_estimation[2]) / 3.0;
+        rgb[3 * offset] = rgb[3 * offset + 1] = rgb[3 * offset + 2] = std::max((Float)0, avg);
+        ++offset;
+    }
+    pbrt::WriteImage("sure_error.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+}
+
 void Film::Preprocess_SURE_ext() {
     Float max_depth = -1.0f;
     for (Point2i p : croppedPixelBounds) {
@@ -326,6 +351,50 @@ void Film::Preprocess_SURE_ext() {
             pixel.depth_variance = (pixel.depth_mean * pixel.depth_mean -
                                     pixel.depth_mean * pixel.depth_mean * invWt) * invWt1;
             pixel.depth_mean *= invWt;
+        }
+    }
+}
+
+void Film::CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Float sigma_N, Float sigma_D) {
+    int radius = (int)round(sigma_S * 2);
+    for (int yy = croppedPixelBounds.pMin.y; yy < croppedPixelBounds.pMax.y; ++yy) {
+        for (int xx = croppedPixelBounds.pMin.x; xx < croppedPixelBounds.pMax.x; ++xx) {
+            int xl = std::max(xx - radius, croppedPixelBounds.pMin.x);
+            int xu = std::min(xx + radius, croppedPixelBounds.pMax.x - 1);
+            int yl = std::max(yy - radius, croppedPixelBounds.pMin.y);
+            int yu = std::min(yy + radius, croppedPixelBounds.pMax.y - 1);
+            Pixel& pixel = GetPixel(Point2i(xx, yy));
+            Vector3f texture_vec(pixel.texture_mean[0], pixel.texture_mean[1], pixel.texture_mean[2]);
+            Vector3f normal_vec(pixel.normal_mean[0], pixel.normal_mean[1], pixel.normal_mean[2]);
+            for (int c = 0; c < 3; ++c) {
+                Float sum_weight = 0.0;
+                Float sum_weighted_color = 0.0;
+                Float sum_weighted_color_squared = 0.0;
+                for (int y = yl; y < yu; ++y) {
+                    Float y_distance = (y - yy) * (y - yy);
+                    for (int x = xl; x < xu; ++x) {
+                        Float x_distance = (x - xx) * (x - xx);
+                        Float spatial_distance = x_distance + y_distance;
+                        Pixel &cur_pixel = GetPixel(Point2i(x, y)); 
+                        Float color_distance = (pixel.color_mean[c] - cur_pixel.color_mean[c]) * (pixel.color_mean[c] - cur_pixel.color_mean[c]);
+                        Float spatial_term = -spatial_distance / (2 * sigma_S * sigma_S);
+                        Float color_term = -color_distance / (2 * sigma_R * sigma_R);
+                        Vector3f cur_texture_vec(cur_pixel.texture_mean[0], cur_pixel.texture_mean[1], cur_pixel.texture_mean[2]);
+                        Vector3f cur_normal_vec(cur_pixel.normal_mean[0], cur_pixel.normal_mean[1], cur_pixel.normal_mean[2]);
+                        Float texture_term = -(texture_vec - cur_texture_vec).LengthSquared() / (2 * sigma_T * sigma_T);
+                        Float normal_term = -(normal_vec - cur_normal_vec).LengthSquared() / (2 * sigma_N * sigma_N);
+                        Float depth_term = -((pixel.depth_mean - cur_pixel.depth_mean) * (pixel.depth_mean - cur_pixel.depth_mean)) / (2 * sigma_D * sigma_D);
+                        Float w = std::exp(spatial_term + color_term + texture_term + normal_term + depth_term);
+                        sum_weight += w;
+                        sum_weighted_color += (w * cur_pixel.color_mean[c]);
+                        sum_weighted_color_squared += (w * cur_pixel.color_mean[c] * cur_pixel.color_mean[c]);
+                    }
+                }
+                pixel.filtered_color[c] = sum_weighted_color / sum_weight;
+                Float dFy = 1.0 / sum_weight + 1.0 / (sigma_R * sigma_R) * (sum_weighted_color_squared / sum_weight - pixel.filtered_color[c] * pixel.filtered_color[c]);
+                Float sure_estimated_error = (pixel.filtered_color[c] - pixel.color_mean[c]) * (pixel.filtered_color[c] - pixel.color_mean[c]) + pixel.color_variance[c] * (2 * dFy - 1.0);
+                pixel.mse_estimation[c] = sure_estimated_error;
+            }
         }
     }
 }
