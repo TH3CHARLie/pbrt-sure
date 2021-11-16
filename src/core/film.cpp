@@ -366,10 +366,10 @@ void Film::CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Flo
             Pixel& pixel = GetPixel(Point2i(xx, yy));
             Vector3f texture_vec(pixel.texture_mean[0], pixel.texture_mean[1], pixel.texture_mean[2]);
             Vector3f normal_vec(pixel.normal_mean[0], pixel.normal_mean[1], pixel.normal_mean[2]);
-            Float sum_weight = 0.0;
-            Float sum_weighted_color = 0.0;
-            Float sum_weighted_color_squared = 0.0;
             for (int c = 0; c < 3; ++c) {
+                Float sum_weight = 0.0;
+                Float sum_weighted_color = 0.0;
+                Float sum_weighted_color_squared = 0.0;
                 for (int y = yl; y < yu; ++y) {
                     Float y_distance = (y - yy) * (y - yy);
                     for (int x = xl; x < xu; ++x) {
@@ -382,8 +382,8 @@ void Film::CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Flo
                         Vector3f cur_texture_vec(cur_pixel.texture_mean[0], cur_pixel.texture_mean[1], cur_pixel.texture_mean[2]);
                         Vector3f cur_normal_vec(cur_pixel.normal_mean[0], cur_pixel.normal_mean[1], cur_pixel.normal_mean[2]);
                         Float texture_term = -(texture_vec - cur_texture_vec).LengthSquared() / (2 * sigma_T * sigma_T);
-                        Float normal_term = -(normal_vec - cur_normal_vec).LengthSquared() / (2 * sigma_T * sigma_T);
-                        Float depth_term = -((pixel.depth_mean - cur_pixel.depth_mean) * (pixel.depth_mean - cur_pixel.depth_mean)) / (2 * sigma_T * sigma_T);
+                        Float normal_term = -(normal_vec - cur_normal_vec).LengthSquared() / (2 * sigma_N * sigma_N);
+                        Float depth_term = -((pixel.depth_mean - cur_pixel.depth_mean) * (pixel.depth_mean - cur_pixel.depth_mean)) / (2 * sigma_D * sigma_D);
                         Float w = std::exp(spatial_term + color_term + texture_term + normal_term + depth_term);
                         sum_weight += w;
                         sum_weighted_color += (w * cur_pixel.color_mean[c]);
