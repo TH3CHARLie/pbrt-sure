@@ -395,8 +395,31 @@ void Film::CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Flo
                 Float sure_estimated_error = (pixel.filtered_color[c] - pixel.color_mean[c]) * (pixel.filtered_color[c] - pixel.color_mean[c]) + pixel.color_variance[c] * (2 * dFy - 1.0);
                 pixel.mse_estimation[c] = sure_estimated_error;
             }
+            Float error_sum = 0;
+            for (int c = 0; c < 3; ++c) {
+                error_sum += pixel.mse_estimation[c];
+            }
+            error_sum = std::max((Float)0.0, error_sum);
+            pixel.avg_mse = error_sum / 3.0;
         }
     }
+}
+
+void Film::UpdateSampleLimit(int totalSampleBudget) {
+    Float total_mse = 0;
+    for (Point2i p: croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        total_mse += pixel.avg_mse;
+    }
+    for (Point2i p: croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        pixel.sample_limit = (int)ceil(pixel.avg_mse / total_mse * totalSampleBudget);
+        std::cout << "sample limit " << pixel.sample_limit << '\n';
+    }
+}
+
+int Film::GetSampleLimit(const Point2i& p) const {
+    return GetPixel(p).sample_limit;
 }
 
 Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter) {
