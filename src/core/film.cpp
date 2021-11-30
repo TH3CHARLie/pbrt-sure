@@ -127,17 +127,21 @@ void Film::MergeFilmTile(std::unique_ptr<FilmTile> tile) {
         for (int i = 0; i < 3; ++i) {
             mergePixel.xyz[i] += xyz[i];
             mergePixel.color_mean[i] += xyz[i];
+            mergePixel.color_squared_sum[i] += (xyz[i] * xyz[i]);
         }
         mergePixel.filterWeightSum += tilePixel.filterWeightSum;
         tilePixel.normal.ToXYZ(xyz);
         for (int i = 0; i < 3; ++i) {
             mergePixel.normal_mean[i] += xyz[i];
+            mergePixel.normal_squared_sum[i] += (xyz[i] * xyz[i]);
         }
         tilePixel.texture_value.ToXYZ(xyz);
         for (int i = 0; i < 3; ++i) {
             mergePixel.texture_mean[i] += xyz[i];
+            mergePixel.texture_squared_sum[i] += (xyz[i] * xyz[i]);
         }
         mergePixel.depth_mean += tilePixel.depth;
+        mergePixel.depth_squared_sum += (tilePixel.depth * tilePixel.depth);
     }
 }
 
@@ -343,18 +347,15 @@ void Film::Preprocess_SURE_ext() {
             Float invWt = (Float)1 / filterWeightSum;
             Float invWt1 = (Float)1 / (filterWeightSum - 1);
             for (int i = 0; i < 3; ++i) {
-                pixel.color_variance[i] = (pixel.color_mean[i] * pixel.color_mean[i] - 
-                                           pixel.color_mean[i] * pixel.color_mean[i] * invWt) * invWt1;
-                pixel.normal_variance[i] = (pixel.normal_mean[i] * pixel.normal_mean[i] - 
-                                            pixel.normal_mean[i] * pixel.normal_mean[i] * invWt) * invWt1;
-                pixel.texture_variance[i] = (pixel.texture_mean[i] * pixel.texture_mean[i] - 
-                                             pixel.texture_mean[i] * pixel.texture_mean[i] * invWt) * invWt1;
+                pixel.color_variance[i] = (pixel.color_squared_sum[i] - pixel.color_mean[i] * pixel.color_mean[i] * invWt) * invWt1;
+                pixel.normal_variance[i] = (pixel.normal_squared_sum[i] - pixel.normal_mean[i] * pixel.normal_mean[i] * invWt) * invWt1;
+                pixel.texture_variance[i] = (pixel.texture_squared_sum[i] - pixel.texture_mean[i] * pixel.texture_mean[i] * invWt) * invWt1;
                 pixel.color_mean[i] = pixel.color_mean[i] * invWt;
                 pixel.normal_mean[i] = pixel.normal_mean[i] * invWt;
                 pixel.texture_mean[i] = pixel.texture_mean[i] * invWt;
             }
             pixel.depth_mean = pixel.depth_mean / max_depth;
-            pixel.depth_variance = (pixel.depth_mean * pixel.depth_mean -
+            pixel.depth_variance = (pixel.depth_squared_sum / (max_depth * max_depth) -
                                     pixel.depth_mean * pixel.depth_mean * invWt) * invWt1;
             pixel.depth_mean *= invWt;
         }

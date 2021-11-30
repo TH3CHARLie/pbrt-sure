@@ -39,7 +39,7 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
     path_integrator->Preprocess(scene, *sampler);
     Bounds2i sample_bounds = camera->film->GetSampleBounds();
     Vector2i sample_extent = sample_bounds.Diagonal();
-    const int tile_size = 16;
+    const int tile_size = 1;
     Point2i num_tiles((sample_extent.x + tile_size - 1) / tile_size,
                       (sample_extent.y + tile_size - 1) / tile_size);
 
