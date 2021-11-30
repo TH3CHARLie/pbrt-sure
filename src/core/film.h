@@ -81,9 +81,9 @@ class Film {
     void WriteSUREEstimatedErrorImage();
     void Preprocess_SURE_ext();
     void CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Float sigma_N, Float sigma_D);
-    void UpdateSampleLimit(int totalSampleBudget);
+    void UpdateSampleLimit(int totalSampleBudget, int maxPerPixelBudget);
     void Clear();
-    int GetSampleLimit(const Point2i& pixel) const;
+    int GetSampleLimit(const Point2i& pixel);
 
     // Film Public Data
     const Point2i fullResolution;

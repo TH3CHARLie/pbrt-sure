@@ -188,6 +188,8 @@ void Film::WriteImage(Float splatScale) {
         << "Converting image to RGB and computing final weighted pixel values";
     std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
     int offset = 0;
+    Float sample_cnt = 0;
+    int pixel_cnt = 0;
     for (Point2i p : croppedPixelBounds) {
         // Convert pixel XYZ color to RGB
         Pixel &pixel = GetPixel(p);
@@ -218,12 +220,15 @@ void Film::WriteImage(Float splatScale) {
         rgb[3 * offset + 1] *= scale;
         rgb[3 * offset + 2] *= scale;
         ++offset;
+        pixel_cnt++;
+        sample_cnt += pixel.filterWeightSum;
     }
 
     // Write RGB image
     LOG(INFO) << "Writing image " << filename << " with bounds "
               << croppedPixelBounds;
     pbrt::WriteImage(filename, &rgb[0], croppedPixelBounds, fullResolution);
+    std::cout << "average samples: " << (1.0 * sample_cnt) / pixel_cnt << '\n';
 }
 
 void Film::WriteColorImage() {
@@ -384,6 +389,8 @@ void Film::CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Flo
                         Float texture_term = -(texture_vec - cur_texture_vec).LengthSquared() / (2 * sigma_T * sigma_T);
                         Float normal_term = -(normal_vec - cur_normal_vec).LengthSquared() / (2 * sigma_N * sigma_N);
                         Float depth_term = -((pixel.depth_mean - cur_pixel.depth_mean) * (pixel.depth_mean - cur_pixel.depth_mean)) / (2 * sigma_D * sigma_D);
+                        // TODO: this is following Tzu-Mao's implementation
+                        color_term = 0;
                         Float w = std::exp(spatial_term + color_term + texture_term + normal_term + depth_term);
                         sum_weight += w;
                         sum_weighted_color += (w * cur_pixel.color_mean[c]);
@@ -391,7 +398,7 @@ void Film::CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Flo
                     }
                 }
                 pixel.filtered_color[c] = sum_weighted_color / sum_weight;
-                Float dFy = 1.0 / sum_weight + 1.0 / (sigma_R * sigma_R) * (sum_weighted_color_squared / sum_weight - pixel.filtered_color[c] * pixel.filtered_color[c]);
+                Float dFy = 1.0 / sum_weight; // + 1.0 / (sigma_R * sigma_R) * (sum_weighted_color_squared / sum_weight - pixel.filtered_color[c] * pixel.filtered_color[c]);
                 Float sure_estimated_error = (pixel.filtered_color[c] - pixel.color_mean[c]) * (pixel.filtered_color[c] - pixel.color_mean[c]) + pixel.color_variance[c] * (2 * dFy - 1.0);
                 pixel.mse_estimation[c] = sure_estimated_error;
             }
@@ -405,7 +412,7 @@ void Film::CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Flo
     }
 }
 
-void Film::UpdateSampleLimit(int totalSampleBudget) {
+void Film::UpdateSampleLimit(int totalSampleBudget, int maxPerPixelBudget) {
     Float total_mse = 0;
     for (Point2i p: croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
@@ -413,13 +420,17 @@ void Film::UpdateSampleLimit(int totalSampleBudget) {
     }
     for (Point2i p: croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
-        pixel.sample_limit = (int)ceil(pixel.avg_mse / total_mse * totalSampleBudget);
-        std::cout << "sample limit " << pixel.sample_limit << '\n';
+        pixel.sample_limit = std::min((int)ceil(pixel.avg_mse / total_mse * totalSampleBudget), maxPerPixelBudget);
+        pixel.sample_limit = std::max(8, pixel.sample_limit);
     }
 }
 
-int Film::GetSampleLimit(const Point2i& p) const {
-    return GetPixel(p).sample_limit;
+int Film::GetSampleLimit(const Point2i& p) {
+    if (InsideExclusive(p, croppedPixelBounds)) {
+        Pixel& pixel = GetPixel(p);
+        return pixel.sample_limit;    
+    }
+    return 0;
 }
 
 Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter) {

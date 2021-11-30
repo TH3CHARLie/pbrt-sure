@@ -44,7 +44,7 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
                       (sample_extent.y + tile_size - 1) / tile_size);
 
     ProgressReporter reporter(num_tiles.x * num_tiles.y,
-                              "SURE-Based Integrator rendering");
+                              "SURE-Based Integrator initial rendering");
     {
         ParallelFor2D(
             [&](Point2i tile) {
@@ -66,7 +66,7 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
                     if (!InsideExclusive(pixel, pixel_bounds)) {
                         continue;
                     }
-
+                    int sample_cnt = 0;
                     do {
                         CameraSample camera_sample =
                             tile_sampler->GetCameraSample(pixel);
@@ -95,26 +95,35 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
                                              ray_weight);
 
                         arena.Reset();
-                    } while (tile_sampler->StartNextSample());
+                        sample_cnt++;
+                    } while (tile_sampler->StartNextSample() && sample_cnt < this->num_initial_samples);
                 }
                 camera->film->MergeFilmTile(std::move(film_tile));
                 reporter.Update();
             },
             num_tiles);
         reporter.Done();
-        camera->film->Preprocess_SURE_ext();
-        Float sigma_S = 2.0, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
-        camera->film->CrossBilateralFilter(sigma_S, sigma_R, sigma_T, sigma_N, sigma_D);
-        camera->film->UpdateSampleLimit(sample_extent.x * sample_extent.y * (this->sample_budget - this->num_initial_samples));
     }
+    camera->film->Preprocess_SURE_ext();
+    Float sigma_S = 4.0, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
+    camera->film->CrossBilateralFilter(sigma_S, sigma_R, sigma_T, sigma_N, sigma_D);
+    camera->film->UpdateSampleLimit(sample_extent.x * sample_extent.y * (this->sample_budget - this->num_initial_samples), this->sample_budget * 4);
+    camera->film->WriteColorImage();
+    camera->film->WriteTextureImage();
+    camera->film->WriteNormalImage();
+    camera->film->WriteDepthImage();
+    camera->film->WriteFilteredImage();
+    camera->film->WriteSUREEstimatedErrorImage();
 
+    ProgressReporter adaptive_reporter(num_tiles.x * num_tiles.y,
+                              "SURE-Based Integrator adaptive rendering");
     // apply adaptive rendering
     {
         ParallelFor2D(
             [&](Point2i tile) {
                 MemoryArena arena;
 
-                int seed = tile.y * num_tiles.x + tile.x;
+                int seed = tile.y * num_tiles.x + tile.x + sample_extent.x * sample_extent.y;
                 std::unique_ptr<Sampler> tile_sampler = sampler->Clone(seed);
                 int x0 = sample_bounds.pMin.x + tile.x * tile_size;
                 int x1 = std::min(x0 + tile_size, sample_bounds.pMax.x);
@@ -166,19 +175,13 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
                     } while (tile_sampler->StartNextSample() && sample_cnt < sample_limit);
                 }
                 camera->film->MergeFilmTile(std::move(film_tile));
-                reporter.Update();
+                adaptive_reporter.Update();
             },
             num_tiles);
-        reporter.Done();
+        adaptive_reporter.Done();
     }
 
     camera->film->WriteImage();
-    camera->film->WriteColorImage();
-    camera->film->WriteTextureImage();
-    camera->film->WriteNormalImage();
-    camera->film->WriteDepthImage();
-    camera->film->WriteFilteredImage();
-    camera->film->WriteSUREEstimatedErrorImage();
 }
 
 }  // namespace pbrt
