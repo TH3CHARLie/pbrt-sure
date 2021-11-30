@@ -58,6 +58,7 @@ struct FilmTilePixel {
     Float depth = 0.f;
 };
 
+constexpr int BANK_SIZE = 5;
 // Film Declarations
 class Film {
   public:
@@ -77,10 +78,10 @@ class Film {
     void WriteTextureImage();
     void WriteNormalImage();
     void WriteDepthImage();
-    void WriteFilteredImage();
+    void WriteFilteredImage(const std::string& filename);
     void WriteSUREEstimatedErrorImage();
     void Preprocess_SURE_ext();
-    void CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Float sigma_N, Float sigma_D);
+    void CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigma_T, Float sigma_N, Float sigma_D);
     void UpdateSampleLimit(int totalSampleBudget, int maxPerPixelBudget);
     void Clear();
     int GetSampleLimit(const Point2i& pixel);
@@ -107,7 +108,6 @@ class Film {
             depth_variance = 0;
             filtered_color[0] = filtered_color[1] = filtered_color[2] = 0;
             mse_estimation[0] = mse_estimation[1] = mse_estimation[2] = 0;
-            avg_mse = 0;
             sample_limit = 0;
         }
 
@@ -123,9 +123,11 @@ class Film {
         Float texture_variance[3];
         Float depth_mean;
         Float depth_variance;
-        Float filtered_color[3];
-        Float mse_estimation[3];
-        Float avg_mse;
+        Float filtered_color[3 * BANK_SIZE];
+        Float mse_estimation[3 * BANK_SIZE];
+        Float avg_mse[BANK_SIZE];
+        Float best_mse;
+        Float best_filtered_color[3];
         int sample_limit;
     };
     std::unique_ptr<Pixel[]> pixels;
