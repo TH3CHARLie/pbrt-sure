@@ -78,13 +78,15 @@ class Film {
     void WriteTextureImage();
     void WriteNormalImage();
     void WriteDepthImage();
-    void WriteFilteredImage(const std::string& filename);
+    void WriteSamplingDensityImage();
+    void WriteFilteredImage(const std::string &filename);
     void WriteSUREEstimatedErrorImage();
     void Preprocess_SURE_ext();
-    void CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigma_T, Float sigma_N, Float sigma_D);
+    void CrossBilateralFilter(Float sigma_S_array[], Float sigma_R,
+                              Float sigma_T, Float sigma_N, Float sigma_D);
     void UpdateSampleLimit(int totalSampleBudget, int maxPerPixelBudget);
     void Clear();
-    int GetSampleLimit(const Point2i& pixel);
+    int GetSampleLimit(const Point2i &pixel);
 
     // Film Public Data
     const Point2i fullResolution;
@@ -137,6 +139,8 @@ class Film {
         Float best_mse;
         Float best_filtered_color[3];
         int sample_limit;
+
+        Float density;
     };
     std::unique_ptr<Pixel[]> pixels;
     static PBRT_CONSTEXPR int filterTableWidth = 16;

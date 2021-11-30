@@ -112,6 +112,7 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
     camera->film->WriteTextureImage();
     camera->film->WriteNormalImage();
     camera->film->WriteDepthImage();
+    camera->film->WriteSamplingDensityImage();
     camera->film->WriteFilteredImage("sure_filtered_init.png");
     camera->film->WriteSUREEstimatedErrorImage();
 
