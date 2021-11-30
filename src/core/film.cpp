@@ -299,6 +299,21 @@ void Film::WriteDepthImage() {
                      fullResolution);
 }
 
+
+void Film::WriteSamplingDensityImage() {
+    std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
+    int offset = 0;
+    for (Point2i p : croppedPixelBounds) {
+        Pixel &pixel = GetPixel(p);
+        // Normalize pixel with weight sum
+        rgb[3 * offset] = rgb[3 * offset + 1] = rgb[3 * offset + 2] =
+                std::max((Float)0, pixel.density);
+        ++offset;
+    }
+    pbrt::WriteImage("sure_sampling_density.png", &rgb[0], croppedPixelBounds,
+                     fullResolution);
+}
+
 void Film::WriteFilteredImage(const std::string& filename) {
     std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
     int offset = 0;
@@ -343,6 +358,7 @@ void Film::Preprocess_SURE_ext() {
             Float invWt = (Float)1 / filterWeightSum;
             Float invWt1 = (Float)1 / (filterWeightSum - 1);
             for (int i = 0; i < 3; ++i) {
+                // TODO: FIX VARIANCE!!
                 pixel.color_variance[i] = (pixel.color_mean[i] * pixel.color_mean[i] - 
                                            pixel.color_mean[i] * pixel.color_mean[i] * invWt) * invWt1;
                 pixel.normal_variance[i] = (pixel.normal_mean[i] * pixel.normal_mean[i] - 
@@ -437,14 +453,20 @@ void Film::CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigm
 }
 
 void Film::UpdateSampleLimit(int totalSampleBudget, int maxPerPixelBudget) {
-    Float total_mse = 0;
+
+    Float total_density = 0;
     for (Point2i p: croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
-        total_mse += pixel.best_mse;
+        Float squared_luminance = pixel.best_filtered_color[0] * pixel.best_filtered_color[0] + 
+                                  pixel.best_filtered_color[1] * pixel.best_filtered_color[1] + 
+                                  pixel.best_filtered_color[2] * pixel.best_filtered_color[2];
+        pixel.density = (pixel.best_mse + 0.0) / (squared_luminance + 1e-9);
+        total_density += pixel.density;
     }
+
     for (Point2i p: croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
-        pixel.sample_limit = std::min((int)ceil(pixel.best_mse / total_mse * totalSampleBudget), maxPerPixelBudget);
+        pixel.sample_limit = std::min((int)ceil(pixel.density / total_density * totalSampleBudget), maxPerPixelBudget);
         pixel.sample_limit = std::max(11, pixel.sample_limit);
     }
 }
