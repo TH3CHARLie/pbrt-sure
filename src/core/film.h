@@ -58,7 +58,7 @@ struct FilmTilePixel {
     Float depth = 0.f;
 };
 
-constexpr int BANK_SIZE = 3;
+constexpr int BANK_SIZE = 5;
 // Film Declarations
 class Film {
   public:

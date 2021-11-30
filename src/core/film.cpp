@@ -378,6 +378,11 @@ void Film::CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigm
                     Float sum_weight = 0.0;
                     Float sum_weighted_color = 0.0;
                     Float sum_weighted_color_squared = 0.0;
+                    if (sigma_S <= 0.0) {
+                        sum_weight = 1.0;
+                        sum_weighted_color = 1.0 * pixel.color_mean[c];
+                        sum_weighted_color_squared = 1.0 * pixel.color_mean[c] * pixel.color_mean[c];
+                    }
                     for (int y = yl; y < yu; ++y) {
                         Float y_distance = (y - yy) * (y - yy);
                         for (int x = xl; x < xu; ++x) {
@@ -385,7 +390,7 @@ void Film::CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigm
                             Float spatial_distance = x_distance + y_distance;
                             Pixel &cur_pixel = GetPixel(Point2i(x, y)); 
                             Float color_distance = (pixel.color_mean[c] - cur_pixel.color_mean[c]) * (pixel.color_mean[c] - cur_pixel.color_mean[c]);
-                            Float spatial_term = -spatial_distance / (2 * sigma_S * sigma_S);
+                            Float spatial_term = sigma_S <= 0 ? 0.0 : -spatial_distance / (2 * sigma_S * sigma_S);
                             Float color_term = -color_distance / (2 * sigma_R * sigma_R);
                             Vector3f cur_texture_vec(cur_pixel.texture_mean[0], cur_pixel.texture_mean[1], cur_pixel.texture_mean[2]);
                             Vector3f cur_normal_vec(cur_pixel.normal_mean[0], cur_pixel.normal_mean[1], cur_pixel.normal_mean[2]);
@@ -440,7 +445,7 @@ void Film::UpdateSampleLimit(int totalSampleBudget, int maxPerPixelBudget) {
     for (Point2i p: croppedPixelBounds) {
         Pixel &pixel = GetPixel(p);
         pixel.sample_limit = std::min((int)ceil(pixel.best_mse / total_mse * totalSampleBudget), maxPerPixelBudget);
-        pixel.sample_limit = std::max(16, pixel.sample_limit);
+        pixel.sample_limit = std::max(11, pixel.sample_limit);
     }
 }
 

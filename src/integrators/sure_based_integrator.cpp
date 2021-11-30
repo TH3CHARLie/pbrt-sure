@@ -105,7 +105,7 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
         reporter.Done();
     }
     camera->film->Preprocess_SURE_ext();
-    Float sigma_S[BANK_SIZE] = {1.0, 2.0, 4.0}, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
+    Float sigma_S[BANK_SIZE] = {0.0, 0.5, 1.0, 2.0, 4.0}, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
     camera->film->CrossBilateralFilter(sigma_S, sigma_R, sigma_T, sigma_N, sigma_D);
     camera->film->UpdateSampleLimit(sample_extent.x * sample_extent.y * (this->sample_budget - this->num_initial_samples), this->sample_budget * 4);
     camera->film->WriteColorImage();
@@ -182,7 +182,7 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
     }
     {
         camera->film->Preprocess_SURE_ext();
-        Float sigma_S[BANK_SIZE] = {1.0, 2.0, 4.0}, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
+        Float sigma_S[BANK_SIZE] = {0.0, 0.5, 1.0, 2.0, 4.0}, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
         camera->film->CrossBilateralFilter(sigma_S, sigma_R, sigma_T, sigma_N, sigma_D);
         camera->film->WriteFilteredImage("sure_filtered_final.png");
     }
