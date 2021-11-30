@@ -81,7 +81,9 @@ class Film {
     void WriteSUREEstimatedErrorImage();
     void Preprocess_SURE_ext();
     void CrossBilateralFilter(Float sigma_S, Float sigma_R, Float sigma_T, Float sigma_N, Float sigma_D);
+    void UpdateSampleLimit(int totalSampleBudget, int maxPerPixelBudget);
     void Clear();
+    int GetSampleLimit(const Point2i& pixel);
 
     // Film Public Data
     const Point2i fullResolution;
@@ -105,6 +107,8 @@ class Film {
             depth_variance = 0;
             filtered_color[0] = filtered_color[1] = filtered_color[2] = 0;
             mse_estimation[0] = mse_estimation[1] = mse_estimation[2] = 0;
+            avg_mse = 0;
+            sample_limit = 0;
         }
 
         Float xyz[3];
@@ -121,6 +125,8 @@ class Film {
         Float depth_variance;
         Float filtered_color[3];
         Float mse_estimation[3];
+        Float avg_mse;
+        int sample_limit;
     };
     std::unique_ptr<Pixel[]> pixels;
     static PBRT_CONSTEXPR int filterTableWidth = 16;
