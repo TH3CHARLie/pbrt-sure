@@ -105,14 +105,14 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
         reporter.Done();
     }
     camera->film->Preprocess_SURE_ext();
-    Float sigma_S = 4.0, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
+    Float sigma_S[BANK_SIZE] = {1.0, 2.0, 4.0}, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
     camera->film->CrossBilateralFilter(sigma_S, sigma_R, sigma_T, sigma_N, sigma_D);
     camera->film->UpdateSampleLimit(sample_extent.x * sample_extent.y * (this->sample_budget - this->num_initial_samples), this->sample_budget * 4);
     camera->film->WriteColorImage();
     camera->film->WriteTextureImage();
     camera->film->WriteNormalImage();
     camera->film->WriteDepthImage();
-    camera->film->WriteFilteredImage();
+    camera->film->WriteFilteredImage("sure_filtered_init.png");
     camera->film->WriteSUREEstimatedErrorImage();
 
     ProgressReporter adaptive_reporter(num_tiles.x * num_tiles.y,
@@ -180,7 +180,12 @@ void SUREBasedIntegrator::Render(const Scene &scene) {
             num_tiles);
         adaptive_reporter.Done();
     }
-
+    {
+        camera->film->Preprocess_SURE_ext();
+        Float sigma_S[BANK_SIZE] = {1.0, 2.0, 4.0}, sigma_R = 0.2, sigma_T = 0.25, sigma_N = 0.8, sigma_D = 0.6;
+        camera->film->CrossBilateralFilter(sigma_S, sigma_R, sigma_T, sigma_N, sigma_D);
+        camera->film->WriteFilteredImage("sure_filtered_final.png");
+    }
     camera->film->WriteImage();
 }
 
