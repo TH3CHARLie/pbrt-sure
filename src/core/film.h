@@ -111,6 +111,10 @@ class Film {
             filtered_color[0] = filtered_color[1] = filtered_color[2] = 0;
             mse_estimation[0] = mse_estimation[1] = mse_estimation[2] = 0;
             sample_limit = 0;
+            color_squared_sum[0] = color_squared_sum[1] = color_squared_sum[2] = 0;
+            normal_squared_sum[0] = normal_squared_sum[1] = normal_squared_sum[2] = 0;
+            texture_squared_sum[0] = texture_squared_sum[1] = texture_squared_sum[2] = 0;
+            depth_squared_sum = 0;
         }
 
         Float xyz[3];
@@ -118,13 +122,17 @@ class Film {
         AtomicFloat splatXYZ[3];
         Float pad;
         Float color_mean[3];
+        Float color_squared_sum[3];
         Float color_variance[3];
         Float normal_mean[3];
         Float normal_variance[3];
+        Float normal_squared_sum[3];
         Float texture_mean[3];
         Float texture_variance[3];
+        Float texture_squared_sum[3];
         Float depth_mean;
         Float depth_variance;
+        Float depth_squared_sum;
         Float filtered_color[3 * BANK_SIZE];
         Float mse_estimation[3 * BANK_SIZE];
         Float avg_mse[BANK_SIZE];
