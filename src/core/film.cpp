@@ -390,10 +390,18 @@ void Film::CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigm
                 Pixel& pixel = GetPixel(Point2i(xx, yy));
                 Vector3f texture_vec(pixel.texture_mean[0], pixel.texture_mean[1], pixel.texture_mean[2]);
                 Vector3f normal_vec(pixel.normal_mean[0], pixel.normal_mean[1], pixel.normal_mean[2]);
+
+                Float sum_weighted_feature[3][10] = {};
+                Float sum_weighted_feature_square[3][10] = {};
+                Float sum_weight_ave = 0;
+
+
+
                 for (int c = 0; c < 3; ++c) {
                     Float sum_weight = 0.0;
                     Float sum_weighted_color = 0.0;
                     Float sum_weighted_color_squared = 0.0;
+
                     if (sigma_S <= 0.0) {
                         sum_weight = 1.0;
                         sum_weighted_color = 1.0 * pixel.color_mean[c];
@@ -419,19 +427,77 @@ void Film::CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigm
                             sum_weight += w;
                             sum_weighted_color += (w * cur_pixel.color_mean[c]);
                             sum_weighted_color_squared += (w * cur_pixel.color_mean[c] * cur_pixel.color_mean[c]);
+
+
+                            sum_weighted_feature[c][0] += w * pixel.color_mean[c] * cur_pixel.color_mean[0];
+                            sum_weighted_feature[c][1] += w * pixel.color_mean[c] * cur_pixel.color_mean[1];
+                            sum_weighted_feature[c][2] += w * pixel.color_mean[c] * cur_pixel.color_mean[2];
+                            sum_weighted_feature[c][3] += w * pixel.color_mean[c] * cur_pixel.texture_mean[0];
+                            sum_weighted_feature[c][4] += w * pixel.color_mean[c] * cur_pixel.texture_mean[1];
+                            sum_weighted_feature[c][5] += w * pixel.color_mean[c] * cur_pixel.texture_mean[2];
+                            sum_weighted_feature[c][6] += w * pixel.color_mean[c] * cur_pixel.normal_mean[0];
+                            sum_weighted_feature[c][7] += w * pixel.color_mean[c] * cur_pixel.normal_mean[1];
+                            sum_weighted_feature[c][8] += w * pixel.color_mean[c] * cur_pixel.normal_mean[2];
+                            sum_weighted_feature[c][9] += w * pixel.color_mean[c] * cur_pixel.depth_mean;
+
+                            sum_weighted_feature_square[c][0] += w * w * pixel.color_mean[c] * cur_pixel.color_mean[0];
+                            sum_weighted_feature_square[c][1] += w * w * pixel.color_mean[c] * cur_pixel.color_mean[1];
+                            sum_weighted_feature_square[c][2] += w * w * pixel.color_mean[c] * cur_pixel.color_mean[2];
+                            sum_weighted_feature_square[c][3] += w * w * pixel.color_mean[c] * cur_pixel.texture_mean[0];
+                            sum_weighted_feature_square[c][4] += w * w * pixel.color_mean[c] * cur_pixel.texture_mean[1];
+                            sum_weighted_feature_square[c][5] += w * w * pixel.color_mean[c] * cur_pixel.texture_mean[2];
+                            sum_weighted_feature_square[c][6] += w * w * pixel.color_mean[c] * cur_pixel.normal_mean[0];
+                            sum_weighted_feature_square[c][7] += w * w * pixel.color_mean[c] * cur_pixel.normal_mean[1];
+                            sum_weighted_feature_square[c][8] += w * w * pixel.color_mean[c] * cur_pixel.normal_mean[2];
+                            sum_weighted_feature_square[c][9] += w * w * pixel.color_mean[c] * cur_pixel.depth_mean;
                         }
                     }
                     pixel.filtered_color[c + 3 * i] = sum_weighted_color / sum_weight;
                     Float dFy = 1.0 / sum_weight + 1.0 / (sigma_R * sigma_R) * (sum_weighted_color_squared / sum_weight - pixel.filtered_color[c] * pixel.filtered_color[c]);
                     Float sure_estimated_error = (pixel.filtered_color[c] - pixel.color_mean[c]) * (pixel.filtered_color[c] - pixel.color_mean[c]) + pixel.color_variance[c] * (2 * dFy - 1.0);
                     pixel.mse_estimation[c + 3 * i] = sure_estimated_error;
+
+                    sum_weight_ave += sum_weight;
                 }
-                Float error_sum = 0;
-                for (int c = 0; c < 3; ++c) {
-                    error_sum += pixel.mse_estimation[c + 3 * i];
+
+                sum_weight_ave /= 3.0;
+
+
+                Float color_diff_term = (pixel.filtered_color[0] - pixel.color_mean[0]) * (pixel.filtered_color[0] - pixel.color_mean[0]) + 
+                                        (pixel.filtered_color[1] - pixel.color_mean[1]) * (pixel.filtered_color[1] - pixel.color_mean[1]) + 
+                                        (pixel.filtered_color[2] - pixel.color_mean[2]) * (pixel.filtered_color[2] - pixel.color_mean[2]); 
+                
+                Float color_dFdx_term = 0;
+                for (int c1 = 0; c1 < 3; ++c1) {
+                    for (int c2 = 0; c2 < 3; ++c2) {
+                        color_dFdx_term += (1 / sum_weight_ave) + (1 / (sigma_R * sigma_R)) * ((sum_weighted_feature[c1][c2] / sum_weight_ave) - (sum_weighted_feature_square[c1][c2] / (sum_weight_ave * sum_weight_ave)));
+                        color_dFdx_term *= 2 * 0.0; // TODO: Covariance
+                    }
                 }
-                error_sum = std::max((Float)0.0, error_sum);
-                pixel.avg_mse[i] = error_sum / 3.0;
+
+                Float feature_dFdx_term = 0;
+                for (int c1 = 0; c1 < 3; ++c1) {
+                    for (int c2 = 3; c2 < 10; ++c2) {
+                        feature_dFdx_term += (1 / sum_weight_ave) + (1 / (sigma_R * sigma_R)) * ((sum_weighted_feature[c1][c2] / sum_weight_ave) - (sum_weighted_feature_square[c1][c2] / (sum_weight_ave * sum_weight_ave)));
+                        feature_dFdx_term *= 2 * 0.0; // TODO: Covariance
+                    }
+                }
+
+                float trace_variance_term =  pixel.color_variance[0] + ixel.color_variance[1] + pixel.color_variance[2];
+
+                Float jsure = color_diff_term + color_dFdx_term + feature_dFdx_term - trace_variance_term;
+                pixel.avg_mse[i] = jsure;
+
+
+
+
+
+                // Float error_sum = 0;
+                // for (int c = 0; c < 3; ++c) {
+                //     error_sum += pixel.mse_estimation[c + 3 * i];
+                // }
+                // error_sum = std::max((Float)0.0, error_sum);
+                // pixel.avg_mse[i] = error_sum / 3.0;
             }
         }
     }
