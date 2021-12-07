@@ -423,8 +423,8 @@ void Film::CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigm
                         }
                     }
                     pixel.filtered_color[c + 3 * i] = sum_weighted_color / sum_weight;
-                    Float dFy = 1.0 / sum_weight + 1.0 / (sigma_R * sigma_R) * (sum_weighted_color_squared / sum_weight - pixel.filtered_color[c] * pixel.filtered_color[c]);
-                    Float sure_estimated_error = (pixel.filtered_color[c] - pixel.color_mean[c]) * (pixel.filtered_color[c] - pixel.color_mean[c]) + pixel.color_variance[c] * (2 * dFy - 1.0);
+                    Float dFy = 1.0 / sum_weight + 1.0 / (sigma_R * sigma_R) * (sum_weighted_color_squared / sum_weight - pixel.filtered_color[c + 3 * i] * pixel.filtered_color[c + 3 * i]);
+                    Float sure_estimated_error = (pixel.filtered_color[c + 3 * i] - pixel.color_mean[c]) * (pixel.filtered_color[c + 3 * i] - pixel.color_mean[c]) + pixel.color_variance[c] * (2 * dFy - 1.0);
                     pixel.mse_estimation[c + 3 * i] = sure_estimated_error;
                 }
                 Float error_sum = 0;
