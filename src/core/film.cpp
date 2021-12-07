@@ -126,21 +126,21 @@ void Film::MergeFilmTile(std::unique_ptr<FilmTile> tile) {
         tilePixel.contribSum.ToXYZ(xyz);
         for (int i = 0; i < 3; ++i) {
             mergePixel.xyz[i] += xyz[i];
-            mergePixel.color_mean[i] += xyz[i];
+            mergePixel.color_sum[i] += xyz[i];
             mergePixel.color_squared_sum[i] += (xyz[i] * xyz[i]);
         }
         mergePixel.filterWeightSum += tilePixel.filterWeightSum;
         tilePixel.normal.ToXYZ(xyz);
         for (int i = 0; i < 3; ++i) {
-            mergePixel.normal_mean[i] += xyz[i];
+            mergePixel.normal_sum[i] += xyz[i];
             mergePixel.normal_squared_sum[i] += (xyz[i] * xyz[i]);
         }
         tilePixel.texture_value.ToXYZ(xyz);
         for (int i = 0; i < 3; ++i) {
-            mergePixel.texture_mean[i] += xyz[i];
+            mergePixel.texture_sum[i] += xyz[i];
             mergePixel.texture_squared_sum[i] += (xyz[i] * xyz[i]);
         }
-        mergePixel.depth_mean += tilePixel.depth;
+        mergePixel.depth_sum += tilePixel.depth;
         mergePixel.depth_squared_sum += (tilePixel.depth * tilePixel.depth);
     }
 }
@@ -236,7 +236,7 @@ void Film::WriteImage(Float splatScale) {
     std::cout << "average samples: " << (1.0 * sample_cnt) / pixel_cnt << '\n';
 }
 
-void Film::WriteColorImage() {
+void Film::WriteColorImage(const std::string& mean_filename, const std::string& variance_filename) {
     std::unique_ptr<Float[]> rgb(new Float[3 * croppedPixelBounds.Area()]);
     std::unique_ptr<Float[]> var_rgb(new Float[3 * croppedPixelBounds.Area()]);
     int offset = 0;
@@ -246,9 +246,9 @@ void Film::WriteColorImage() {
         XYZToRGB(pixel.color_variance, &var_rgb[3 * offset]);
         ++offset;
     }
-    pbrt::WriteImage("sure_color_mean.png", &rgb[0], croppedPixelBounds,
+    pbrt::WriteImage(mean_filename, &rgb[0], croppedPixelBounds,
                      fullResolution);
-    pbrt::WriteImage("sure_color_variance.png", &var_rgb[0], croppedPixelBounds,
+    pbrt::WriteImage(variance_filename, &var_rgb[0], croppedPixelBounds,
                      fullResolution);
 }
 
@@ -351,7 +351,7 @@ void Film::Preprocess_SURE_ext() {
         Float filterWeightSum = pixel.filterWeightSum;
         if (filterWeightSum != 0) {
             Float invWt = (Float)1 / filterWeightSum;
-            max_depth = std::max(max_depth, pixel.depth_mean * invWt);
+            max_depth = std::max(max_depth, pixel.depth_sum * invWt);
         }
     }
     for (Point2i p: croppedPixelBounds) {
@@ -362,17 +362,18 @@ void Film::Preprocess_SURE_ext() {
             Float invWt = (Float)1 / filterWeightSum;
             Float invWt1 = (Float)1 / (filterWeightSum - 1);
             for (int i = 0; i < 3; ++i) {
-                pixel.color_variance[i] = (pixel.color_squared_sum[i] - pixel.color_mean[i] * pixel.color_mean[i] * invWt) * invWt1;
-                pixel.normal_variance[i] = (pixel.normal_squared_sum[i] - pixel.normal_mean[i] * pixel.normal_mean[i] * invWt) * invWt1;
-                pixel.texture_variance[i] = (pixel.texture_squared_sum[i] - pixel.texture_mean[i] * pixel.texture_mean[i] * invWt) * invWt1;
-                pixel.color_mean[i] = pixel.color_mean[i] * invWt;
-                pixel.normal_mean[i] = pixel.normal_mean[i] * invWt;
-                pixel.texture_mean[i] = pixel.texture_mean[i] * invWt;
+                pixel.color_variance[i] = (pixel.color_squared_sum[i] - pixel.color_sum[i] * pixel.color_sum[i] * invWt) * invWt1;
+                pixel.normal_variance[i] = (pixel.normal_squared_sum[i] - pixel.normal_sum[i] * pixel.normal_sum[i] * invWt) * invWt1;
+                pixel.texture_variance[i] = (pixel.texture_squared_sum[i] - pixel.texture_sum[i] * pixel.texture_sum[i] * invWt) * invWt1;
+                pixel.color_mean[i] = pixel.color_sum[i] * invWt;
+                pixel.normal_mean[i] = pixel.normal_sum[i] * invWt;
+                pixel.texture_mean[i] = pixel.texture_sum[i] * invWt;
             }
+            Float tmp = pixel.depth_sum / max_depth;
             pixel.depth_mean = pixel.depth_mean / max_depth;
             pixel.depth_variance = (pixel.depth_squared_sum / (max_depth * max_depth) -
-                                    pixel.depth_mean * pixel.depth_mean * invWt) * invWt1;
-            pixel.depth_mean *= invWt;
+                                    tmp * tmp * invWt) * invWt1;
+            pixel.depth_mean = tmp * invWt;
         }
     }
 }
