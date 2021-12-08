@@ -56,6 +56,12 @@ struct FilmTilePixel {
     Spectrum normal = 0.f;
     Spectrum texture_value = 0.f;
     Float depth = 0.f;
+
+    Spectrum samples_color[128];
+    Spectrum samples_normal[128];
+    Spectrum samples_texture[128];
+    Float samples_depth[128];
+    int current_sample_count = 0;
 };
 
 constexpr int BANK_SIZE = 5;
@@ -149,6 +155,7 @@ class Film {
         int sample_limit;
 
         Float density;
+        Float covariance[3][10];
     };
     std::unique_ptr<Pixel[]> pixels;
     static PBRT_CONSTEXPR int filterTableWidth = 16;
@@ -265,6 +272,15 @@ class FilmTile {
                 pixel.texture_value +=
                     auxiliary.texture_value * sampleWeight * filterWeight;
                 pixel.depth += auxiliary.depth;
+
+                // For covariance computation
+                pixel.samples_color[pixel.current_sample_count] = L * sampleWeight * filterWeight;
+                pixel.samples_normal[pixel.current_sample_count][0] = auxiliary.normal[0] * sampleWeight * filterWeight;
+                pixel.samples_normal[pixel.current_sample_count][1] = auxiliary.normal[1] * sampleWeight * filterWeight;
+                pixel.samples_normal[pixel.current_sample_count][2] = auxiliary.normal[2] * sampleWeight * filterWeight;
+                pixel.samples_texture[pixel.current_sample_count] = auxiliary.texture_value * sampleWeight * filterWeight;
+                pixel.samples_depth[pixel.current_sample_count] = auxiliary.depth;
+                pixel.current_sample_count++;
             }
         }
     }

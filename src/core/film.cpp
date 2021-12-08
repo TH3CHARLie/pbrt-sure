@@ -142,6 +142,70 @@ void Film::MergeFilmTile(std::unique_ptr<FilmTile> tile) {
         }
         mergePixel.depth_sum += tilePixel.depth;
         mergePixel.depth_squared_sum += (tilePixel.depth * tilePixel.depth);
+
+
+        for ( int x = 0; x < 3; x++ ) {
+
+            for ( int y = 0; y < 3; y++ ) {
+                float cov_sum = 0;
+                for ( int i = 0; i < tilePixel.current_sample_count; i++ ) {
+                    Float xyz[3];
+                    Float xyz_sum[3];
+                    tilePixel.samples_color[i].ToXYZ(xyz);
+                    tilePixel.contribSum.ToXYZ(xyz_sum);
+                    cov_sum += (xyz[x] - xyz_sum[x]) * (xyz[y] - xyz_sum[y]);
+                } 
+                mergePixel.covariance[x][y] = cov_sum / float(tilePixel.current_sample_count - 1);
+                if ( tilePixel.current_sample_count == 1 ) mergePixel.covariance[x][y] = 0;
+            }
+
+            for ( int y = 0; y < 3; y++ ) {
+                float cov_sum = 0;
+                for ( int i = 0; i < tilePixel.current_sample_count; i++ ) {
+                    Float xyz_x[3];
+                    Float xyz_y[3];
+                    Float xyz_x_sum[3];
+                    Float xyz_y_sum[3];
+                    tilePixel.samples_color[i].ToXYZ(xyz);
+                    tilePixel.samples_normal[i].ToXYZ(xyz);
+                    tilePixel.contribSum.ToXYZ(xyz_x_sum);
+                    tilePixel.normal.ToXYZ(xyz_y_sum);
+                    cov_sum += (xyz_x[x] - xyz_x_sum[x]) * (xyz_y[y] - xyz_y_sum[y]);
+                } 
+                mergePixel.covariance[x][3+y] = cov_sum / float(tilePixel.current_sample_count - 1);
+                if ( tilePixel.current_sample_count == 1 ) mergePixel.covariance[x][3+y] = 0;
+            }
+
+            for ( int y = 0; y < 3; y++ ) {
+                float cov_sum = 0;
+                for ( int i = 0; i < tilePixel.current_sample_count; i++ ) {
+                    Float xyz_x[3];
+                    Float xyz_y[3];
+                    Float xyz_x_sum[3];
+                    Float xyz_y_sum[3];
+                    tilePixel.samples_color[i].ToXYZ(xyz);
+                    tilePixel.samples_texture[i].ToXYZ(xyz);
+                    tilePixel.contribSum.ToXYZ(xyz_x_sum);
+                    tilePixel.texture_value.ToXYZ(xyz_y_sum);
+                    cov_sum += (xyz_x[x] - xyz_x_sum[x]) * (xyz_y[y] - xyz_y_sum[y]);
+                } 
+                mergePixel.covariance[x][6+y] = cov_sum / float(tilePixel.current_sample_count - 1);
+                if ( tilePixel.current_sample_count == 1 ) mergePixel.covariance[x][6+y] = 0;
+            }
+
+            {
+                float cov_sum = 0;
+                for ( int i = 0; i < tilePixel.current_sample_count; i++ ) {
+                    Float xyz_x[3];
+                    Float xyz_x_sum[3];
+                    tilePixel.samples_color[i].ToXYZ(xyz);
+                    tilePixel.contribSum.ToXYZ(xyz_x_sum);
+                    cov_sum += (xyz_x[x] - xyz_x_sum[x]) * (tilePixel.samples_depth[i] - tilePixel.depth);
+                } 
+                mergePixel.covariance[x][9] = cov_sum / float(tilePixel.current_sample_count - 1);
+                if ( tilePixel.current_sample_count == 1 ) mergePixel.covariance[x][9] = 0;
+            }
+        }
     }
 }
 
@@ -454,8 +518,8 @@ void Film::CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigm
                         }
                     }
                     pixel.filtered_color[c + 3 * i] = sum_weighted_color / sum_weight;
-                    Float dFy = 1.0 / sum_weight + 1.0 / (sigma_R * sigma_R) * (sum_weighted_color_squared / sum_weight - pixel.filtered_color[c] * pixel.filtered_color[c]);
-                    Float sure_estimated_error = (pixel.filtered_color[c] - pixel.color_mean[c]) * (pixel.filtered_color[c] - pixel.color_mean[c]) + pixel.color_variance[c] * (2 * dFy - 1.0);
+                    Float dFy = 1.0 / sum_weight + 1.0 / (sigma_R * sigma_R) * (sum_weighted_color_squared / sum_weight - pixel.filtered_color[c + 3 * i] * pixel.filtered_color[c + 3 * i]);
+                    Float sure_estimated_error = (pixel.filtered_color[c + 3 * i] - pixel.color_mean[c]) * (pixel.filtered_color[c + 3 * i] - pixel.color_mean[c]) + pixel.color_variance[c] * (2 * dFy - 1.0);
                     pixel.mse_estimation[c + 3 * i] = sure_estimated_error;
 
                     sum_weight_ave += sum_weight;
@@ -471,16 +535,14 @@ void Film::CrossBilateralFilter(Float sigma_S_array[], Float sigma_R, Float sigm
                 Float color_dFdx_term = 0;
                 for (int c1 = 0; c1 < 3; ++c1) {
                     for (int c2 = 0; c2 < 3; ++c2) {
-                        color_dFdx_term += (1 / sum_weight_ave) + (1 / (sigma_R * sigma_R)) * ((sum_weighted_feature[c1][c2] / sum_weight_ave) - (sum_weighted_feature_square[c1][c2] / (sum_weight_ave * sum_weight_ave)));
-                        color_dFdx_term *= 2 * 0.0; // TODO: Covariance
+                        color_dFdx_term += 2 * pixel.covariance[c1][c2] * (1 / sum_weight_ave) + (1 / (sigma_R * sigma_R)) * ((sum_weighted_feature[c1][c2] / sum_weight_ave) - (sum_weighted_feature_square[c1][c2] / (sum_weight_ave * sum_weight_ave)));
                     }
                 }
 
                 Float feature_dFdx_term = 0;
                 for (int c1 = 0; c1 < 3; ++c1) {
                     for (int c2 = 3; c2 < 10; ++c2) {
-                        feature_dFdx_term += (1 / sum_weight_ave) + (1 / (sigma_R * sigma_R)) * ((sum_weighted_feature[c1][c2] / sum_weight_ave) - (sum_weighted_feature_square[c1][c2] / (sum_weight_ave * sum_weight_ave)));
-                        feature_dFdx_term *= 2 * 0.0; // TODO: Covariance
+                        feature_dFdx_term += 2 * pixel.covariance[c1][c2] * (1 / sum_weight_ave) + (1 / (sigma_R * sigma_R)) * ((sum_weighted_feature[c1][c2] / sum_weight_ave) - (sum_weighted_feature_square[c1][c2] / (sum_weight_ave * sum_weight_ave)));
                     }
                 }
 
